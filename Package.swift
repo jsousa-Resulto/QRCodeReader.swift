@@ -1,16 +1,22 @@
-// swift-tools-version:5.0
+// swift-tools-version:5.7
+
 import PackageDescription
 
 let package = Package(
-  name: "QRCodeReader",
+  name: "QRCodeReader.swift",
+  platforms: [
+    .iOS(.v13),
+  ],
   products: [
-    .library(name: "QRCodeReader", targets: ["QRCodeReader"]),
+    .library(
+      name: "QRCodeReader",
+      targets: ["QRCodeReader"]
+    ),
   ],
   targets: [
     .target(
       name: "QRCodeReader",
-      dependencies: [],
-      path: "Sources"),
+      path: "Sources"
+    ),
   ]
 )
-
