@@ -138,6 +138,8 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
   // MARK: - Initializing the AV Components
 
   private func configureDefaultComponents(withCaptureDevicePosition: AVCaptureDevice.Position) {
+    session.beginConfiguration()
+
     for output in session.outputs {
       session.removeOutput(output)
     }
@@ -145,29 +147,55 @@ public final class QRCodeReader: NSObject, AVCaptureMetadataOutputObjectsDelegat
       session.removeInput(input)
     }
 
-    // Add video input
+    // Add video input (must be added before output for availableMetadataObjectTypes to be populated)
+    var inputAdded = false
     switch withCaptureDevicePosition {
     case .front:
       if let _frontDeviceInput = frontDeviceInput {
         session.addInput(_frontDeviceInput)
+        inputAdded = true
       }
     default:
       if let _defaultDeviceInput = defaultDeviceInput {
         session.addInput(_defaultDeviceInput)
+        inputAdded = true
       }
+    }
+
+    guard inputAdded else {
+      session.commitConfiguration()
+      return
     }
 
     // Add metadata output
     session.addOutput(metadataOutput)
     metadataOutput.setMetadataObjectsDelegate(self, queue: metadataObjectsQueue)
 
-    let allTypes = Set(metadataOutput.availableMetadataObjectTypes)
-    let filtered = metadataObjectTypes.filter { (mediaType) -> Bool in
-      allTypes.contains(mediaType)
+    let availableTypes = metadataOutput.availableMetadataObjectTypes
+    let allTypes = Set(availableTypes)
+
+    // Filter to only supported types. Use Array() to avoid NSGenericException during fast enumeration
+    // when passing to AVFoundation internals (metadataObjectTypesForMetadataIdentifiers)
+    let filtered = metadataObjectTypes.filter { allTypes.contains($0) }
+
+    // Fallback: if no types match (e.g. availableMetadataObjectTypes empty on some devices),
+    // use .qr if available, otherwise skip setting to avoid crash
+    let typesToSet: [AVMetadataObject.ObjectType]
+    if !filtered.isEmpty {
+      typesToSet = Array(filtered)
+    } else if allTypes.contains(.qr) {
+      typesToSet = [.qr]
+    } else if let firstAvailable = availableTypes.first {
+      typesToSet = [firstAvailable]
+    } else {
+      typesToSet = []
     }
 
-    metadataOutput.metadataObjectTypes = filtered
-    previewLayer.videoGravity          = .resizeAspectFill
+    if !typesToSet.isEmpty {
+      metadataOutput.metadataObjectTypes = typesToSet
+    }
+
+    previewLayer.videoGravity = .resizeAspectFill
 
     session.commitConfiguration()
   }
